@@ -16,15 +16,20 @@
 
 ## Как собрать и запустить
 
-Если хочешь попробовать собрать и запустить лаунчер сам:
+Если хочешь собрать и запустить лаунчер самостоятельно, рекомендуем использовать **Qt Creator**:
+
+1. Клонируй репозиторий:
 
 ```bash
 git clone https://github.com/CyBeRcOtIc/PhotinageLauncher.git
 cd PhotinageLauncher
-qmake
-make
-./PhotinageLauncher
 ```
+
+2. Открой проект в Qt Creator (PhotinageLauncher/CMakeLists.txt).
+
+3. Выбери Kit с нужной версией Qt(6.9.1) и компилятором (например, MinGW).
+
+4. Нажми Собрать и затем Запустить.
 
 ---
 
