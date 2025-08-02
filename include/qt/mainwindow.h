@@ -2,6 +2,7 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
+#include "qt/versioncard.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -23,9 +24,13 @@ protected:
     void changeEvent(QEvent *event) override;
 private:
     void setPlaceholders();
-    Ui::MainWindow *ui;
+    void setSideBarButtons();
+    void setComboBoxes();
+    void setPlayMenu();
     bool isRounded = true;
     bool m_wasMaximizedBeforeMinimize = false;
-    constexpr static int CornerRadius = 30;
+    constexpr static int CornerRadius = 20;
+    Ui::MainWindow *ui;
+    VersionCard* versionCard;
 };
 #endif // MAINWINDOW_H

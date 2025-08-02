@@ -1,0 +1,15 @@
+<RCC>
+    <qresource prefix="/styles">
+        <file>side_bar_button_style.qss</file>
+        <file>version_combo_box_close.qss</file>
+        <file>version_combo_box_open.qss</file>
+        <file>version_card_play_button_style.qss</file>
+    </qresource>
+    <qresource prefix="/icons">
+        <file>arrow-down.svg</file>
+        <file>arrow-up.svg</file>
+    </qresource>
+    <qresource prefix="/assets">
+        <file>version_1.12.2.png</file>
+    </qresource>
+</RCC>

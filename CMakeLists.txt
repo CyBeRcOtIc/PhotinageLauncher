@@ -19,9 +19,11 @@ set(PROJECT_SOURCES
         src/main.cpp
         src/qt/mainwindow.cpp
         src/qt/titlebar.cpp
+        src/io/styleloader.cpp
 
         include/qt/mainwindow.h
         include/qt/titlebar.h
+        include/io/styleloader.h
 
         qt/mainwindow.ui
         qt/titlebar.ui
@@ -31,6 +33,11 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
     qt_add_executable(PhotinageLauncher
         MANUAL_FINALIZATION
         ${PROJECT_SOURCES}
+        res/resources.qrc
+        include/qt/ccombobox.h
+        src/qt/ccombobox.cpp
+        include/qt/versioncard.h
+        src/qt/versioncard.cpp
     )
 # Define target properties for Android with Qt 6 as:
 #    set_property(TARGET PhotinageLauncher APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR

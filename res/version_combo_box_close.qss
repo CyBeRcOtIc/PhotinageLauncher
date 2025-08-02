@@ -1,0 +1,26 @@
+QComboBox {
+    border: 1px solid #173c63;
+    border-radius: 8px;
+    padding: 4px 30px 4px 10px;
+    background-color: #0f2842;
+    color: white;
+}
+
+QComboBox::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 24px;
+    border: none;
+    background: transparent;
+    border-top-right-radius: 8px;
+    border-bottom-right-radius: 8px;
+    margin: 0px;
+}
+
+QComboBox::down-arrow {
+    image: url(:/icons/arrow-down.svg);
+    width: 24px;
+    height: 24px;
+    margin-right: 6px;
+    margin-top: 3px;
+}
