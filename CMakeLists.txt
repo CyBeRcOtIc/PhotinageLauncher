@@ -14,16 +14,27 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets)
+find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Network)
 
 set(PROJECT_SOURCES
         src/main.cpp
         src/qt/mainwindow.cpp
         src/qt/titlebar.cpp
         src/io/styleloader.cpp
+        src/qt/ccombobox.cpp
+        src/qt/versioncard.cpp
+        src/io/netloader.cpp
+        src/io/custommessagehandler.cpp
+        src/launcher/versionloader.cpp
 
         include/qt/mainwindow.h
         include/qt/titlebar.h
         include/io/styleloader.h
+        include/qt/ccombobox.h
+        include/qt/versioncard.h
+        include/io/netloader.h
+        include/io/custommessagehandler.h
+        include/launcher/versionloader.h
 
         qt/mainwindow.ui
         qt/titlebar.ui
@@ -34,10 +45,13 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         MANUAL_FINALIZATION
         ${PROJECT_SOURCES}
         res/resources.qrc
-        include/qt/ccombobox.h
-        src/qt/ccombobox.cpp
-        include/qt/versioncard.h
-        src/qt/versioncard.cpp
+        include/launcher/tool.h
+        src/launcher/tool.cpp
+
+        src/io/filemanager.cpp
+        include/io/filemanager.h
+
+
     )
 # Define target properties for Android with Qt 6 as:
 #    set_property(TARGET PhotinageLauncher APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR
@@ -57,8 +71,9 @@ else()
     endif()
 endif()
 
-target_link_libraries(PhotinageLauncher PRIVATE 
-	Qt${QT_VERSION_MAJOR}::Widgets
+target_link_libraries(PhotinageLauncher PRIVATE
+    Qt${QT_VERSION_MAJOR}::Widgets
+    Qt${QT_VERSION_MAJOR}::Network
 )
 
 target_include_directories(PhotinageLauncher PRIVATE

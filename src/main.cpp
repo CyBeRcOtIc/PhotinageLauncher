@@ -1,11 +1,16 @@
 #include <QApplication>
 #include "qt/mainwindow.h"
 #include <QDebug>
+#include "io/custommessagehandler.h"
 
 int main(int argc, char *argv[])
 {
     QApplication a(argc, argv);
     a.setFont(QFont("Segoe UI"));
+
+    setLogFile("logs.txt");
+    qInstallMessageHandler(customMessageHandler);
+
     MainWindow w;
     w.setWindowFlag(Qt::FramelessWindowHint, true);
     w.show();

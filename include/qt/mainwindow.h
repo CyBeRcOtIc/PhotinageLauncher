@@ -27,10 +27,12 @@ private:
     void setSideBarButtons();
     void setComboBoxes();
     void setPlayMenu();
+private:
     bool isRounded = true;
     bool m_wasMaximizedBeforeMinimize = false;
     constexpr static int CornerRadius = 20;
     Ui::MainWindow *ui;
     VersionCard* versionCard;
+    QLabel* infoLabel;
 };
 #endif // MAINWINDOW_H

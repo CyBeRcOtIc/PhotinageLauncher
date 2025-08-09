@@ -11,13 +11,13 @@ public:
     explicit VersionCard(QWidget* parent = nullptr);
 public:
     void setVersionData(const QString& version, const QString& imgPath, const QString& desc);
-private:
-    QPixmap createRoundedImage(const QString& path, int radius, int width);
-private:
+public:
     QLabel* imageLabel;
     QLabel* versionLabel;
     QLabel* descriptionLabel;
     QPushButton* playButton;
+private:
+    QPixmap createRoundedImage(const QString& path, int radius, int width);
 };
 
 #endif // VERSIONCARD_H

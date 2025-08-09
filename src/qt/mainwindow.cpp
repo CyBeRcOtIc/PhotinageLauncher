@@ -13,6 +13,7 @@
 #include "qt/ccombobox.h"
 #include <QVector>
 #include "qt/versioncard.h"
+#include "launcher/versionloader.h"
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -27,27 +28,43 @@ MainWindow::MainWindow(QWidget *parent)
     this->setPlayMenu();
 }
 
-void MainWindow::setComboBoxes(){
-    QVector<QComboBox*> boxes;
-    boxes.append(this->ui->versionComboBox);
-    boxes.append(this->ui->forgeComboBox);
-    boxes.append(this->ui->optifineComboBox);
-    QVector<QBoxLayout*> lays;
-    lays.append(qobject_cast<QBoxLayout*>(this->ui->versionSelectorWidget->layout()));
-    lays.append(qobject_cast<QBoxLayout*>(this->ui->forgeSelectorWidget->layout()));
-    lays.append(qobject_cast<QBoxLayout*>(this->ui->optifineSelectorWidget->layout()));
+void MainWindow::setComboBoxes() {
+    QVector<QComboBox*> oldBoxes = {
+        this->ui->versionComboBox,
+        this->ui->forgeComboBox,
+        this->ui->optifineComboBox
+    };
 
-    for(int a = 0; a < 3; a++){
-        CComboBox* cm = new CComboBox(this);
-        QBoxLayout* lay = lays[a];
-        int index = lay->indexOf(boxes[a]);
-        lay->removeWidget(boxes[a]);
-        lay->insertWidget(index, cm);
-        cm->setStyleSheet(boxes[a]->styleSheet());
-        cm->setFont(boxes[a]->font());
-        boxes[a]->deleteLater();
+    QVector<QBoxLayout*> layouts = {
+        qobject_cast<QBoxLayout*>(this->ui->versionSelectorWidget->layout()),
+        qobject_cast<QBoxLayout*>(this->ui->forgeSelectorWidget->layout()),
+        qobject_cast<QBoxLayout*>(this->ui->optifineSelectorWidget->layout())
+    };
+
+    for (int i = 0; i < oldBoxes.size(); ++i) {
+        QBoxLayout* layout = layouts[i];
+        QComboBox* oldBox = oldBoxes[i];
+
+        int index = layout->indexOf(oldBox);
+        layout->removeWidget(oldBox);
+
+        CComboBox* newBox = new CComboBox(this);
+
+        newBox->setStyleSheet(oldBox->styleSheet());
+        newBox->setFont(oldBox->font());
+
+        layout->insertWidget(index, newBox);
+
+        oldBox->deleteLater();
+
+        switch (i) {
+        case 0: this->ui->versionComboBox = newBox; break;
+        case 1: this->ui->forgeComboBox = newBox; break;
+        case 2: this->ui->optifineComboBox = newBox; break;
+        }
     }
 }
+
 
 void MainWindow::setPlayMenu()
 {
@@ -98,7 +115,13 @@ void MainWindow::setPlayMenu()
     if(!scrollAreaLayout) return;
 
     this->versionCard = new VersionCard(this->ui->scrollContentWidget);
+
+    this->infoLabel = new QLabel(this->ui->scrollContentWidget);
+    this->infoLabel->setText("");
+    IO::StyleLoader::applyStyle(this->infoLabel, ":/styles/info_label_style.qss");
+
     scrollAreaLayout->addWidget(this->versionCard);
+    scrollAreaLayout->addWidget(this->infoLabel);
     QTimer::singleShot(0, this, [this](){
         this->versionCard->setVersionData(
             "<div>"
@@ -108,6 +131,18 @@ void MainWindow::setPlayMenu()
             ":/assets/version_1.12.2.png",
             "New release!\n-New Mob\n-New Item"
             );
+    });
+
+
+
+    Launcher::VersionLoader* loader = new Launcher::VersionLoader(this);
+    connect(loader, &Launcher::VersionLoader::manifestDownloaded, this, [=](){
+        this->ui->versionComboBox->addItems(loader->getVersionsList(Launcher::VersionLoader::VersionStrategy::release_new));
+    });
+    loader->downloadManifest();
+
+    connect(this->versionCard->playButton, &QPushButton::clicked, this->versionCard->playButton, [=](){
+        loader->downloadVersion(this->ui->versionComboBox->currentText(), "C:/Users/Kirill/AppData/Roaming/.photinage/.minecraft");
     });
 }
 

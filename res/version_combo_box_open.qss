@@ -40,3 +40,32 @@ QComboBox::down-arrow {
     margin-right: 6px;
     margin-top: 3px;
 }
+
+QComboBox QAbstractItemView QScrollBar:vertical {
+    background: #0f2842;
+    width: 12px;
+    margin: 2px 0 2px 0;
+    border: 1px solid #173c63;
+    border-radius: 6px;
+}
+
+QComboBox QAbstractItemView QScrollBar::handle:vertical {
+    background: #173c63;
+    min-height: 20px;
+    border-radius: 5px;
+}
+
+QComboBox QAbstractItemView QScrollBar::handle:vertical:hover {
+    background: #0088ff;
+}
+
+QComboBox QAbstractItemView QScrollBar::add-line:vertical,
+QComboBox QAbstractItemView QScrollBar::sub-line:vertical {
+    height: 0px;
+    subcontrol-origin: margin;
+}
+
+QComboBox QAbstractItemView QScrollBar::add-page:vertical,
+QComboBox QAbstractItemView QScrollBar::sub-page:vertical {
+    background: none;
+}

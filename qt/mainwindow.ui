@@ -272,8 +272,11 @@
                  </size>
                 </property>
                 <property name="styleSheet">
-                 <string notr="true">background-color: transparent;
-border: none;</string>
+                 <string notr="true">QScrollArea{
+	background-color: transparent;
+	border: none;
+	border-right: 2px solid rgb(1, 33, 57);
+}</string>
                 </property>
                 <property name="horizontalScrollBarPolicy">
                  <enum>Qt::ScrollBarPolicy::ScrollBarAlwaysOff</enum>
@@ -286,8 +289,8 @@ border: none;</string>
                   <rect>
                    <x>0</x>
                    <y>0</y>
-                   <width>380</width>
-                   <height>646</height>
+                   <width>376</width>
+                   <height>642</height>
                   </rect>
                  </property>
                  <property name="sizePolicy">
