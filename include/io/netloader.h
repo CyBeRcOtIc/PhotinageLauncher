@@ -13,8 +13,8 @@ class NetLoader : public QObject {
 public:
     explicit NetLoader(QObject* parent = nullptr);
 public:
-    void downloadToByteArray(const QString& url);
-    void downloadToFile(const QString& url, const QString& fullPath);
+    void downloadToByteArray(const QString& url, int retries = 3);
+    void downloadToFile(const QString& url, const QString& fullPath, int retries = 3);
     void cancel();
 signals:
     void progress(int percent);
@@ -22,10 +22,9 @@ signals:
     void fileDownloaded(const QString& path);
     void failed(const QString& error);
     void cancelled();
-    void finished(QNetworkReply::NetworkError err);
+    void finished(QNetworkReply::NetworkError err, const QString& str);
 private:
     QNetworkAccessManager manager;
-    QNetworkReply* curReply;
 };
 
 }

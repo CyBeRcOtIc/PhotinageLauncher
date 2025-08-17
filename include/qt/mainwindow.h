@@ -3,6 +3,7 @@
 
 #include <QMainWindow>
 #include "qt/versioncard.h"
+#include "launcher/versionloader.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -25,14 +26,15 @@ protected:
 private:
     void setPlaceholders();
     void setSideBarButtons();
-    void setComboBoxes();
+    void setInstallationsMenu();
     void setPlayMenu();
 private:
     bool isRounded = true;
     bool m_wasMaximizedBeforeMinimize = false;
     constexpr static int CornerRadius = 20;
+    QStringList versionsToDownload;
+    Launcher::VersionLoader* loader;
     Ui::MainWindow *ui;
     VersionCard* versionCard;
-    QLabel* infoLabel;
 };
 #endif // MAINWINDOW_H

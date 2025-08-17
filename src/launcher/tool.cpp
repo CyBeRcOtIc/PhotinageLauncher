@@ -38,6 +38,21 @@ QString Launcher::Tool::getVersionClientUrl(const QByteArray &versionJson)
     return clientObj.value("url").toString();
 }
 
+Launcher::Tool::AssetIndexInfo Launcher::Tool::getAssetIndexInfo(const QByteArray &versionJson)
+{
+    QJsonDocument doc = QJsonDocument::fromJson(versionJson);
+    if(doc.isNull() || !doc.isObject()){
+        qWarning() << "[getAssetIndexInfo] error parse json";
+        return AssetIndexInfo();
+    }
+    QJsonObject rootObj = doc.object();
+    QJsonObject assetIndexObj = rootObj.value("assetIndex").toObject();
+    AssetIndexInfo assetIndexInfo;
+    assetIndexInfo.id = assetIndexObj.value("id").toString();
+    assetIndexInfo.url = assetIndexObj.value("url").toString();
+    return assetIndexInfo;
+}
+
 bool Launcher::Tool::versionGreaterOrEqual(const QString &v1, const QString &v2)
 {
     QStringList a = v1.split(".");
@@ -54,4 +69,36 @@ bool Launcher::Tool::versionGreaterOrEqual(const QString &v1, const QString &v2)
         if (numA < numB) return false;
     }
     return true;
+}
+
+QList<Launcher::Tool::AssetInfo> Launcher::Tool::parseAssets(const QByteArray &indexJson)
+{
+    QJsonDocument doc = QJsonDocument::fromJson(indexJson);
+    QList<AssetInfo> assets;
+
+    if(doc.isNull() || !doc.isObject()){
+        qWarning() << "[parseAssets] error parse json";
+        return assets;
+    }
+    QJsonObject rootObj = doc.object();
+
+    if (!rootObj.contains("objects"))
+        return assets;
+
+    QJsonObject objects = rootObj["objects"].toObject();
+
+    for (auto it = objects.begin(); it != objects.end(); ++it)
+    {
+        QJsonObject obj = it.value().toObject();
+
+        QString hash = obj["hash"].toString();
+        QString subdir = hash.left(2);
+        QString url = QString("https://resources.download.minecraft.net/%1/%2").arg(subdir, hash);
+        QString path = QString("/assets/objects/%1/%2").arg(subdir, hash);
+
+        AssetInfo info(url, path);
+        assets.append(info);
+    }
+
+    return assets;
 }

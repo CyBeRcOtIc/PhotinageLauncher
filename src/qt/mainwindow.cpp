@@ -12,8 +12,8 @@
 #include "io/styleloader.h"
 #include "qt/ccombobox.h"
 #include <QVector>
+#include <QFileDialog>
 #include "qt/versioncard.h"
-#include "launcher/versionloader.h"
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -24,11 +24,11 @@ MainWindow::MainWindow(QWidget *parent)
     this->setStyleSheet("");
     this->setPlaceholders();
     this->setSideBarButtons();
-    this->setComboBoxes();
+    this->setInstallationsMenu();
     this->setPlayMenu();
 }
 
-void MainWindow::setComboBoxes() {
+void MainWindow::setInstallationsMenu() {
     QVector<QComboBox*> oldBoxes = {
         this->ui->versionComboBox,
         this->ui->forgeComboBox,
@@ -63,6 +63,20 @@ void MainWindow::setComboBoxes() {
         case 2: this->ui->optifineComboBox = newBox; break;
         }
     }
+
+    connect(this->ui->reviewButton, &QPushButton::clicked, this->ui->reviewButton, [&](){
+        QString dir = QFileDialog::getExistingDirectory(
+            this,
+            tr("Select folder"),
+            QDir::homePath(),
+            QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks
+            );
+
+        if (!dir.isEmpty()) {
+            qDebug() << "Selected folder:" << dir;
+            this->ui->gamePathLine->setText(dir);
+        }
+    });
 }
 
 
@@ -116,12 +130,7 @@ void MainWindow::setPlayMenu()
 
     this->versionCard = new VersionCard(this->ui->scrollContentWidget);
 
-    this->infoLabel = new QLabel(this->ui->scrollContentWidget);
-    this->infoLabel->setText("");
-    IO::StyleLoader::applyStyle(this->infoLabel, ":/styles/info_label_style.qss");
-
     scrollAreaLayout->addWidget(this->versionCard);
-    scrollAreaLayout->addWidget(this->infoLabel);
     QTimer::singleShot(0, this, [this](){
         this->versionCard->setVersionData(
             "<div>"
@@ -133,16 +142,16 @@ void MainWindow::setPlayMenu()
             );
     });
 
-
-
-    Launcher::VersionLoader* loader = new Launcher::VersionLoader(this);
-    connect(loader, &Launcher::VersionLoader::manifestDownloaded, this, [=](){
-        this->ui->versionComboBox->addItems(loader->getVersionsList(Launcher::VersionLoader::VersionStrategy::release_new));
+    loader = new Launcher::VersionLoader(this);
+    connect(loader, &Launcher::VersionLoader::manifestDownloaded, this, [&](){
+        this->versionsToDownload = loader->getVersionsList(Launcher::VersionLoader::VersionStrategy::release_new
+                                                           | Launcher::VersionLoader::VersionStrategy::release_old);
+        this->ui->versionComboBox->addItems(this->versionsToDownload);
     });
     loader->downloadManifest();
 
-    connect(this->versionCard->playButton, &QPushButton::clicked, this->versionCard->playButton, [=](){
-        loader->downloadVersion(this->ui->versionComboBox->currentText(), "C:/Users/Kirill/AppData/Roaming/.photinage/.minecraft");
+    connect(this->versionCard->playButton, &QPushButton::clicked, this, [&]() {
+        loader->downloadVersion(this->ui->versionComboBox->currentText(), this->ui->gamePathLine->text() + "/.minecraft");
     });
 }
 

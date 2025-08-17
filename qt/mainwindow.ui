@@ -892,7 +892,7 @@ QPushButton:pressed {
                   </widget>
                  </item>
                  <item>
-                  <widget class="QPushButton" name="pushButton_2">
+                  <widget class="QPushButton" name="reviewButton">
                    <property name="maximumSize">
                     <size>
                      <width>100</width>
@@ -913,7 +913,7 @@ QPushButton:pressed {
                   </widget>
                  </item>
                  <item>
-                  <widget class="QPushButton" name="pushButton">
+                  <widget class="QPushButton" name="openButton">
                    <property name="maximumSize">
                     <size>
                      <width>100</width>
