@@ -94,13 +94,13 @@ void Launcher::VersionLoader::downloadAssets(const QString &mcPath, const QByteA
         loader->deleteLater();
     });
     connect(loader, &IO::NetLoader::fileDownloaded, loader, [assets, loader, mcPath](const QString& path){
-        qInfo() << "[downloadAssets] Load asset in path:" << path;
         if(assets->isEmpty()){
             qInfo() << "[downloadAssets] Assets downloaded";
             loader->deleteLater();
             return;
         }
         Launcher::Tool::AssetInfo info = assets->takeFirst();
+        qInfo() << "[downloadAssets] Load asset:" << info.name;
         loader->downloadToFile(info.url, mcPath + info.path);
     });
     Launcher::Tool::AssetInfo info = assets->takeFirst();

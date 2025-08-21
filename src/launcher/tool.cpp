@@ -93,10 +93,11 @@ QList<Launcher::Tool::AssetInfo> Launcher::Tool::parseAssets(const QByteArray &i
 
         QString hash = obj["hash"].toString();
         QString subdir = hash.left(2);
+        QString name = it.key();
         QString url = QString("https://resources.download.minecraft.net/%1/%2").arg(subdir, hash);
         QString path = QString("/assets/objects/%1/%2").arg(subdir, hash);
 
-        AssetInfo info(url, path);
+        AssetInfo info(url, path, name);
         assets.append(info);
     }
 

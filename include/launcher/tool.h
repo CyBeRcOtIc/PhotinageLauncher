@@ -17,11 +17,12 @@ public:
     struct AssetInfo
     {
     public:
-        AssetInfo(const QString& url, const QString& path) : url(url), path(path) {}
-        bool isEmpty() const { return url.isEmpty() || path.isEmpty(); }
+        AssetInfo(const QString& url, const QString& path, const QString& name) : url(url), path(path), name(name) {}
+        bool isEmpty() const { return url.isEmpty() || path.isEmpty() || name.isEmpty(); }
     public:
         QString url;
         QString path;
+        QString name;
     };
 public:
     static QString getVersionJsonUrl(const QByteArray& versionManifest, const QString& id);
