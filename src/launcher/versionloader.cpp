@@ -44,12 +44,13 @@ void Launcher::VersionLoader::downloadVersion(const QString &id, const QString &
 
 void Launcher::VersionLoader::downloadManifest(const QString &manifestUrl)
 {
-    IO::NetLoader* loader = new IO::NetLoader();
-    connect(loader, &IO::NetLoader::byteArrayDownloaded, loader, [&](const QByteArray& content){
+    IO::NetLoader* loader = new IO::NetLoader(this);
+    connect(loader, &IO::NetLoader::byteArrayDownloaded, loader, [loader, this](const QByteArray& content){
+        loader->deleteLater();
         m_data.setVersionManifestJson(content);
         emit manifestDownloaded();
     });
-    connect(loader, &IO::NetLoader::finished, loader, &QObject::deleteLater);
+    connect(loader, &IO::NetLoader::failed, loader, &QObject::deleteLater);
     loader->downloadToByteArray(manifestUrl);
 }
 
@@ -62,17 +63,16 @@ void Launcher::VersionLoader::downloadClient(const QString &fullPath, const QByt
         return;
     }
 
-    IO::NetLoader* loader = new IO::NetLoader();
-    connect(loader, &IO::NetLoader::fileDownloaded, loader, [&](const QString& path){
+    IO::NetLoader* loader = new IO::NetLoader(this);
+    connect(loader, &IO::NetLoader::fileDownloaded, loader, [loader, this](const QString& path){
+        loader->deleteLater();
         qInfo() << "[downloadClient] client downloaded on the way: " << path;
         emit downloadedClient(true);
     });
-    connect(loader, &IO::NetLoader::finished, loader, [loader, this](QNetworkReply::NetworkError err, const QString& str){
+    connect(loader, &IO::NetLoader::failed, loader, [loader, this](const QNetworkReply::NetworkError& err, const QString& str){
         loader->deleteLater();
-        if(err != QNetworkReply::NoError){
-            qWarning() << "[downloadClient] Failed download client: " << str;
-            emit downloadedClient(false);
-        }
+        qWarning() << "[downloadClient] Failed download client: " << str;
+        emit downloadedClient(false);
     });
     loader->downloadToFile(url, fullPath);
 }
@@ -84,27 +84,43 @@ void Launcher::VersionLoader::downloadAssets(const QString &mcPath, const QByteA
         );
 
     if (assets->isEmpty()) {
-        qInfo() << "[downloadAssets] No assets to download";
+        qWarning() << "[downloadAssets] No assets to download";
         return;
     }
 
-    IO::NetLoader* loader = new IO::NetLoader();
-    connect(loader, &IO::NetLoader::failed, loader, [loader](const QString& err){
-        qWarning() << "[downloadAssets] Failed load asset:" << err;
-        loader->deleteLater();
-    });
-    connect(loader, &IO::NetLoader::fileDownloaded, loader, [assets, loader, mcPath](const QString& path){
-        if(assets->isEmpty()){
-            qInfo() << "[downloadAssets] Assets downloaded";
+    auto tasks = QSharedPointer<QQueue<IO::NetLoader::Task>>::create();
+
+    for (int i = 0; i < assets->size(); ++i) {
+        const Launcher::Tool::AssetInfo &val = assets->at(i);
+        IO::NetLoader::Task task;
+        task.url = val.url;
+        task.fullPath = mcPath + val.path;
+        task.retries = 3;
+        task.isFile = true;
+        tasks->enqueue(task);
+    }
+
+    int loaderCount = 8;
+    for (int i = 0; i < loaderCount; ++i) {
+        IO::NetLoader *loader = new IO::NetLoader(this, true);
+        loader->setQueue(tasks);
+
+        connect(loader, &IO::NetLoader::failed, this, [loader](const QNetworkReply::NetworkError& err, const QString &str){
             loader->deleteLater();
-            return;
-        }
-        Launcher::Tool::AssetInfo info = assets->takeFirst();
-        qInfo() << "[downloadAssets] Load asset:" << info.name;
-        loader->downloadToFile(info.url, mcPath + info.path);
-    });
-    Launcher::Tool::AssetInfo info = assets->takeFirst();
-    loader->downloadToFile(info.url, mcPath + info.path);
+            qWarning() << "[downloadAssets] Failed load asset:" << str;
+        });
+
+        connect(loader, &IO::NetLoader::fileDownloaded, this, [loader](const QString &path){
+            qDebug() << "[downloadAssets] Loaded asset:" << path;
+        });
+
+        connect(loader, &IO::NetLoader::allTasksFinished, loader, [loader](){
+            loader->deleteLater();
+            qDebug() << "[downloadAssets] Loader finished all tasks";
+        });
+
+        loader->downloadNext();
+    }
 }
 
 void Launcher::VersionLoader::downloadVersionAndIndexJson(const QString &id, const QString &mcPath)
@@ -116,8 +132,9 @@ void Launcher::VersionLoader::downloadVersionAndIndexJson(const QString &id, con
         return;
     }
 
-    IO::NetLoader* versionJsonLoader = new IO::NetLoader();
-    connect(versionJsonLoader, &IO::NetLoader::byteArrayDownloaded, versionJsonLoader, [this, mcPath, id](const QByteArray& version){
+    IO::NetLoader* versionJsonLoader = new IO::NetLoader(this);
+    connect(versionJsonLoader, &IO::NetLoader::byteArrayDownloaded, versionJsonLoader, [this, mcPath, id, versionJsonLoader](const QByteArray& version){
+        versionJsonLoader->deleteLater();
         if(!IO::FileManager::createAndWriteFile(version, mcPath + "/versions/" + id + "/" + id + ".json")){
             qWarning() << "[downloadVersionAndIndexJson] Failed save: " << id + ".json";
             emit downloadedVersionAndIndexJson(false);
@@ -132,8 +149,9 @@ void Launcher::VersionLoader::downloadVersionAndIndexJson(const QString &id, con
         }
         m_data.setVersionJson(version);
 
-        IO::NetLoader* indexJsonLoader = new IO::NetLoader();
-        connect(indexJsonLoader, &IO::NetLoader::byteArrayDownloaded, indexJsonLoader, [this, mcPath, assetIndexInfo](const QByteArray& index){
+        IO::NetLoader* indexJsonLoader = new IO::NetLoader(this);
+        connect(indexJsonLoader, &IO::NetLoader::byteArrayDownloaded, indexJsonLoader, [this, mcPath, assetIndexInfo, indexJsonLoader](const QByteArray& index){
+            indexJsonLoader->deleteLater();
             if(!IO::FileManager::createAndWriteFile(index, mcPath + "/assets/indexes/" + assetIndexInfo.id + ".json")){
                 qWarning() << "[downloadVersionAndIndexJson] Failed save: " << assetIndexInfo.id + ".json";
                 emit downloadedVersionAndIndexJson(false);
@@ -142,19 +160,15 @@ void Launcher::VersionLoader::downloadVersionAndIndexJson(const QString &id, con
             m_data.setIndexJson(index);
             emit downloadedVersionAndIndexJson(true);
         });
-        connect(indexJsonLoader, &IO::NetLoader::finished, indexJsonLoader, [this, indexJsonLoader](QNetworkReply::NetworkError err){
+        connect(indexJsonLoader, &IO::NetLoader::failed, indexJsonLoader, [this, indexJsonLoader](const QNetworkReply::NetworkError& err){
             indexJsonLoader->deleteLater();
-            if(err != QNetworkReply::NoError){
-                emit downloadedVersionAndIndexJson(false);
-            }
+            emit downloadedVersionAndIndexJson(false);
         });
         indexJsonLoader->downloadToByteArray(assetIndexInfo.url);
     });
-    connect(versionJsonLoader, &IO::NetLoader::finished, versionJsonLoader, [this, versionJsonLoader](QNetworkReply::NetworkError err){
+    connect(versionJsonLoader, &IO::NetLoader::failed, versionJsonLoader, [this, versionJsonLoader](const QNetworkReply::NetworkError& err){
         versionJsonLoader->deleteLater();
-        if(err != QNetworkReply::NoError){
-            emit downloadedVersionAndIndexJson(false);
-        }
+        emit downloadedVersionAndIndexJson(false);
     });
 
     versionJsonLoader->downloadToByteArray(verUrl);

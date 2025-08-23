@@ -5,8 +5,12 @@
 #include <QTimer>
 #include <qdir.h>
 
-IO::NetLoader::NetLoader(QObject *parent) : QObject(parent)
+IO::NetLoader::NetLoader(QObject *parent, bool isExternalQueue) : QObject(parent), m_isExternalQueue(isExternalQueue),
+    m_isBusy(false), m_queue(nullptr), m_curReply(nullptr)
 {
+    if(!isExternalQueue){
+        m_queue = QSharedPointer<QQueue<IO::NetLoader::Task>>::create();
+    }
 }
 
 void IO::NetLoader::downloadToByteArray(const QString &url, int retries)
@@ -16,7 +20,7 @@ void IO::NetLoader::downloadToByteArray(const QString &url, int retries)
     task.isFile = false;
     task.retries = retries;
 
-    m_queue.enqueue(task);
+    m_queue->enqueue(task);
     if(!m_isBusy){
         downloadNext();
     }
@@ -30,46 +34,52 @@ void IO::NetLoader::downloadToFile(const QString &url, const QString &fullPath, 
     task.isFile = true;
     task.retries = retries;
 
-    m_queue.enqueue(task);
+    m_queue->enqueue(task);
     if(!m_isBusy){
         downloadNext();
     }
 }
 
-void IO::NetLoader::downloadNext()
-{
-    if(m_queue.isEmpty()){
+void IO::NetLoader::setQueue(QSharedPointer<QQueue<IO::NetLoader::Task>> q) {
+    if (m_isExternalQueue && q) {
+        cancel();
+        m_queue = q;
         m_isBusy = false;
-        return;
-    }
-
-    m_isBusy = true;
-    auto task = m_queue.dequeue();
-
-    if(m_curReply){
-        m_curReply->abort();
-        m_curReply->deleteLater();
-        m_curReply = nullptr;
-    }
-
-    if(task.isFile){
-        downloadFile(task);
-    }
-    else{
-        downloadByteArray(task);
     }
 }
 
-void IO::NetLoader::cancel()
-{
-    if(m_curReply){
+void IO::NetLoader::downloadNext() {
+    if (!m_queue) return;
+
+    if (m_queue->isEmpty()) {
+        m_isBusy = false;
+        emit allTasksFinished();
+        return;
+    }
+
+    if (m_isBusy) return;
+
+    Task task = m_queue->dequeue();
+    m_isBusy = true;
+
+    if (task.isFile)
+        downloadFile(task);
+    else
+        downloadByteArray(task);
+}
+
+void IO::NetLoader::cancel() {
+    if (m_curReply) {
         disconnect(m_curReply, nullptr, this, nullptr);
         m_curReply->abort();
         m_curReply->deleteLater();
         m_curReply = nullptr;
     }
 
-    m_queue.clear();
+    if (!m_isExternalQueue && m_queue) {
+        m_queue->clear();
+    }
+
     m_isBusy = false;
     emit cancelled();
 }
@@ -78,7 +88,7 @@ void IO::NetLoader::downloadFile(Task task)
 {
     bool res = QDir().mkpath(QFileInfo(task.fullPath).absolutePath());
     if(!res){
-        emit failed("access error");
+        emit failed(QNetworkReply::UnknownNetworkError, "dir: access error");
         return;
     }
 
@@ -87,69 +97,68 @@ void IO::NetLoader::downloadFile(Task task)
 
     QFile* file = new QFile(task.fullPath, m_curReply);
     if (!file->open(QIODevice::WriteOnly)) {
-        emit failed(QString("Не удалось открыть файл: %1").arg(task.fullPath));
+        emit failed(QNetworkReply::UnknownNetworkError,
+                    QString("Не удалось открыть файл: %1").arg(task.fullPath));
         m_curReply->abort();
         m_curReply->deleteLater();
         m_curReply = nullptr;
         return;
     }
 
-    connect(m_curReply, &QNetworkReply::readyRead, this, [=]() {
+    connect(m_curReply, &QNetworkReply::readyRead, this, [file, this]() {
         file->write(m_curReply->readAll());
     });
 
-    connect(m_curReply, &QNetworkReply::downloadProgress, this, [=](qint64 received, qint64 total) {
-        if (total > 0)
-            emit progress(static_cast<int>((received * 100) / total));
-    });
+    connect(m_curReply, &QNetworkReply::downloadProgress, this,
+            [this](qint64 received, qint64 total) {
+                if (total > 0)
+                    emit progress(static_cast<int>((received * 100) / total));
+            });
 
-    connect(m_curReply, &QNetworkReply::finished, this, [=]() mutable {
+    connect(m_curReply, &QNetworkReply::finished, this, [file, task, this]() mutable {
         file->flush();
         file->close();
 
         QNetworkReply::NetworkError err = m_curReply->error();
         int httpCode = m_curReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
 
-        if(err == QNetworkReply::NoError){
+        bool localError = (err != QNetworkReply::NoError && err != QNetworkReply::OperationCanceledError);
+        bool retryableServerError = (httpCode == 0 || httpCode == 429 || (httpCode >= 500 && httpCode <= 504));
+        bool criticalServerError = (httpCode >= 400 && httpCode < 500 && httpCode != 429);
+
+        if (!localError && !retryableServerError && !criticalServerError) {
             emit fileDownloaded(task.fullPath);
         }
-        else if(err == QNetworkReply::OperationCanceledError){
+        else if (err == QNetworkReply::OperationCanceledError) {
             emit cancelled();
+        }
+        else if ((localError || retryableServerError) && task.retries > 0) {
+            qWarning() << "[downloadToFile] Temporary error, retry..."
+                       << m_curReply->errorString() << "HTTP:" << httpCode;
+
+            QFile::remove(task.fullPath);
+            m_curReply->deleteLater();
+            m_curReply = nullptr;
+            m_isBusy = false;
+
+            task.retries -= 1;
+            QTimer::singleShot(1000, this, [task, this]() {
+                m_queue->enqueue(task);
+                downloadNext();
+            });
+            return;
         }
         else {
             QFile::remove(task.fullPath);
-
-            bool retryable = false;
-            if (err != QNetworkReply::NoError || httpCode == 429 || httpCode == 500 ||
-                httpCode == 502 || httpCode == 503 || httpCode == 504) {
-                retryable = true;
-            }
-
-            if(retryable && task.retries > 0){
-                qWarning() << "[downloadToFile] Temporary error, retry..." << m_curReply->errorString() << "HTTP:" << httpCode;
-                m_curReply->deleteLater();
-                m_curReply = nullptr;
-                m_isBusy = false;
-
-                QTimer::singleShot(1000, this, [=]() mutable {
-                    task.retries -= 1;
-                    m_queue.enqueue(task);
-
-                    downloadNext();
-                });
-                return;
-            }
-            else {
-                qWarning() << "[downloadToFile] Failed completely:" << m_curReply->errorString() << "HTTP:" << httpCode;
-                emit failed(m_curReply->errorString());
-            }
+            qWarning() << "[downloadToFile] Failed completely:"
+                       << m_curReply->errorString() << "HTTP:" << httpCode;
+            emit failed(err, m_curReply->errorString());
         }
 
-        QString errstr = m_curReply->errorString();
         m_curReply->deleteLater();
         m_curReply = nullptr;
         m_isBusy = false;
-        emit finished(err, errstr);
+
         downloadNext();
     });
 }
@@ -159,55 +168,52 @@ void IO::NetLoader::downloadByteArray(Task task)
     QNetworkRequest request(task.url);
     m_curReply = m_manager.get(request);
 
-    connect(m_curReply, &QNetworkReply::downloadProgress, this, [=](qint64 received, qint64 total) {
-        if (total > 0)
-            emit progress(static_cast<int>((received * 100) / total));
-    });
+    connect(m_curReply, &QNetworkReply::downloadProgress, this,
+            [this](qint64 received, qint64 total) {
+                if (total > 0)
+                    emit progress(static_cast<int>((received * 100) / total));
+            });
 
-    connect(m_curReply, &QNetworkReply::finished, this, [=]() mutable {
+    connect(m_curReply, &QNetworkReply::finished, this, [task, this]() mutable {
         QNetworkReply::NetworkError err = m_curReply->error();
         int httpCode = m_curReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
 
-        if(err == QNetworkReply::NoError){
+        bool localError = (err != QNetworkReply::NoError && err != QNetworkReply::OperationCanceledError);
+        bool retryableServerError = (httpCode == 0 || httpCode == 429 || (httpCode >= 500 && httpCode <= 504));
+        bool criticalServerError = (httpCode >= 400 && httpCode < 500 && httpCode != 429);
+
+        if (!localError && !retryableServerError && !criticalServerError) {
             const QByteArray data = m_curReply->readAll();
             emit byteArrayDownloaded(data);
         }
-        else if(err == QNetworkReply::OperationCanceledError){
+        else if (err == QNetworkReply::OperationCanceledError) {
             emit cancelled();
         }
+        else if ((localError || retryableServerError) && task.retries > 0) {
+            qWarning() << "[downloadToByteArray] Temporary error, retry..."
+                       << m_curReply->errorString() << "HTTP:" << httpCode;
+
+            m_curReply->deleteLater();
+            m_curReply = nullptr;
+            m_isBusy = false;
+
+            task.retries -= 1;
+            QTimer::singleShot(1000, this, [task, this]() {
+                m_queue->enqueue(task);
+                downloadNext();
+            });
+            return;
+        }
         else {
-            bool retryable = false;
-            if (err != QNetworkReply::NoError || httpCode == 429 || httpCode == 500 ||
-                httpCode == 502 || httpCode == 503 || httpCode == 504) {
-                retryable = true;
-            }
-
-            if(retryable && task.retries > 0){
-                qWarning() << "[downloadToByteArray] Temporary error, retry..."
-                           << m_curReply->errorString() << "HTTP:" << httpCode;
-
-                m_curReply->deleteLater();
-                m_curReply = nullptr;
-                m_isBusy = false;
-
-                QTimer::singleShot(1000, this, [=]() mutable{
-                    task.retries -= 1;
-                    m_queue.enqueue(task);
-                    downloadNext();
-                });
-                return;
-            } else {
-                qWarning() << "[downloadToByteArray] Failed completely:"
-                           << m_curReply->errorString() << "HTTP:" << httpCode;
-                emit failed(m_curReply->errorString());
-            }
+            qWarning() << "[downloadToByteArray] Failed completely:"
+                       << m_curReply->errorString() << "HTTP:" << httpCode;
+            emit failed(err, m_curReply->errorString());
         }
 
-        QString errstr = m_curReply->errorString();
         m_curReply->deleteLater();
         m_curReply = nullptr;
         m_isBusy = false;
-        emit finished(err, errstr);
+
         downloadNext();
     });
 }

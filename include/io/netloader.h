@@ -20,10 +20,11 @@ public:
         bool isFile;
     };
 public:
-    explicit NetLoader(QObject* parent = nullptr);
+    explicit NetLoader(QObject* parent = nullptr, bool isExternalQueue = false);
 public:
     void downloadToByteArray(const QString& url, int retries = 3);
     void downloadToFile(const QString& url, const QString& fullPath, int retries = 3);
+    void setQueue(QSharedPointer<QQueue<IO::NetLoader::Task>> q);
     void downloadNext();
     void cancel();
 private:
@@ -33,14 +34,15 @@ signals:
     void progress(int percent);
     void byteArrayDownloaded(const QByteArray& content);
     void fileDownloaded(const QString& path);
-    void failed(const QString& error);
+    void failed(const QNetworkReply::NetworkError& err, const QString& errstr);
     void cancelled();
-    void finished(QNetworkReply::NetworkError err, const QString& str);
+    void allTasksFinished();
 private:
-    QQueue<Task> m_queue;
+    QSharedPointer<QQueue<IO::NetLoader::Task>> m_queue;
     QNetworkAccessManager m_manager;
-    QNetworkReply* m_curReply = nullptr;
+    QNetworkReply* m_curReply;
     bool m_isBusy;
+    bool m_isExternalQueue;
 };
 
 }
